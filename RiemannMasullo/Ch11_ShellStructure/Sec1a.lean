@@ -1,6 +1,7 @@
 module
 
 public import RiemannMasullo.Ch02_AdelicTheta.Sec2b
+import all RiemannMasullo.AppA_AlgebraicNT.Sec1
 
 /-!
 # General convergence criteria for adelic theta
@@ -394,6 +395,64 @@ Chapter 2 homogeneous theta by the character of the input's norm-one component. 
 def homogeneousThetaSectionAverage (ω : χ) (f : 𝕀[F] → ℂ) (g : 𝕀[F]) : ℂ :=
   ∫ h in E₁, weightedTheta ω f g h ∂μ₁
 
+open scoped Pointwise in
+include hrep₁ hrep in
+/-- The norm-one domain is Borel and is a fundamental domain for the principal ideles. -/
+private theorem homogeneousThetaSectionAverage_fundamentalDomain
+    (i : Fˣ →* N[F]) (hi : ∀ ξ, (i ξ).val = principal ξ) :
+    MeasurableSet E₁ ∧ IsFundamentalDomain i.range E₁ μ₁ := by
+  let : BorelSpace 𝕀[F] := ⟨rfl⟩
+  let : (μ₁).IsHaarMeasure := (normOneIdeleTamagawaMeasure_existsUnique F).exists.choose_spec.1
+  let U := (InfiniteAdeleRing F)ˣ
+  let K := (infiniteIdeleNorm F).ker
+  let : MeasurableSpace U := borel _
+  let : BorelSpace U := ⟨rfl⟩
+  let D := infiniteIdeleFundamentalDomain F b v₀ σ
+  have hD : MeasurableSet D := by
+    let L (g : K) : Units.dirichletUnitTheorem.logSpace F := fun w ↦ infiniteIdeleLog F g.val w.val
+    have hL : Continuous L := continuous_pi fun w ↦
+      (continuous_apply w.val).comp ((infiniteIdeleLog_continuous F).comp continuous_subtype_val)
+    let z (g : K) := InfinitePlace.Completion.extensionEmbedding v₀ (g.val.val v₀)
+    have hz : Continuous z := (InfinitePlace.Completion.isometry_extensionEmbedding v₀).continuous.comp
+      ((continuous_apply v₀).comp (Units.continuous_val.comp continuous_subtype_val))
+    exact ((ZSpan.fundamentalDomain_measurableSet _).preimage hL.measurable).inter
+      (measurableSet_Ico.preimage
+        (Complex.measurable_arg.comp (σ.toLinearMap.continuous_of_finiteDimensional.comp hz).measurable))
+  have himg : MeasurableSet (K.subtype '' D) :=
+    (infiniteIdeleNorm_ker_closed F).isClosedEmbedding_subtypeVal.measurableEmbedding.measurableSet_image' hD
+  have hE : MeasurableSet E₁ := by
+    obtain ⟨_, _, _, _, _, hFinite, ⟨ePic⟩⟩ := ideleClassGroup_finiteness F
+    have : Finite (CommRing.Pic (𝓞 F)) := @Finite.of_equiv _ _ hFinite ePic.toEquiv
+    apply MeasurableSet.iUnion
+    intro c
+    apply MeasurableSet.const_smul
+    let j := Units.map (integralAdelesOutside F ∅).subtype.toMonoidHom
+    let q := Units.map (RingHom.fst (InfiniteAdeleRing F) (IsDedekindDomain.FiniteAdeleRing (𝓞 F) F)).toMonoidHom
+    have hfin : MeasurableSet ((Subtype.val : N[F] → 𝕀[F]) ⁻¹' Set.range j) :=
+      ((isOpenEmbedding_integralAdeleUnits F ∅).isOpen_range.preimage continuous_subtype_val).measurableSet
+    have harch : MeasurableSet ((fun g : N[F] ↦ q g.val) ⁻¹' (K.subtype '' D)) :=
+      himg.preimage ((continuous_fst.units_map _).comp continuous_subtype_val).measurable
+    exact hfin.inter harch
+  let j := (IdeleGroup.unitEmbedding (𝓞 F) F).codRestrict (ideleNorm F).ker
+    (fun ξ ↦ (ideleNorm_spec F).2 (mem_range_self ξ))
+  have hji (ξ : Fˣ) : j ξ = i ξ := Subtype.ext (hi ξ).symm
+  refine ⟨hE, IsFundamentalDomain.mk'' hE.nullMeasurableSet ?_ ?_ ?_⟩
+  · refine .of_forall fun x ↦ ?_
+    have hx : x ∈ ⋃ ξ : Fˣ, j ξ • E₁ :=
+      (ideleFundamentalDomain_cover F b v₀ σ rep hrep₁ hrep).symm ▸ mem_univ _
+    obtain ⟨ξ, y, hy, hxy⟩ := mem_iUnion.mp hx
+    refine ⟨(i.rangeRestrict ξ)⁻¹, ?_⟩
+    change (i ξ)⁻¹ * x ∈ E₁
+    change j ξ * y = x at hxy
+    rwa [← hxy, hji, inv_mul_cancel_left]
+  · intro a ha
+    obtain ⟨ξ, rfl⟩ := i.rangeRestrict_surjective a
+    have hξ : ξ ≠ 1 := fun h ↦ ha (h ▸ map_one i.rangeRestrict)
+    change AEDisjoint μ₁ (i ξ • E₁) E₁
+    rw [← hji]
+    exact (ideleFundamentalDomain_disjoint F b v₀ σ rep hrep₁ hrep ξ hξ).aedisjoint
+  · exact fun a ↦ (measurePreserving_mul_left μ₁ a.val).quasiMeasurePreserving
+
 include he_one hrep₁ hrep in
 /-- Paper: Equation (11.1.1.12), p. 479. For each Schwartz–Bruhat input,
 the section average is the character of the norm-one component times the
@@ -404,7 +463,54 @@ theorem homogeneousThetaSectionAverage_schwartzBruhat_eq_character_mul (ω : χ)
     (ψ : ℬ[F]) (g : 𝕀[F]) :
     homogeneousThetaSectionAverage e v₀ σ b rep ω (ideleValue ψ) g =
       (ω (classOfNormOne (e.symm g).2) : ℂ) *
-        homogeneousAdelicTheta ω ψ (classOf g) := by sorry
+        homogeneousAdelicTheta ω ψ (classOf g) := by
+  let : BorelSpace 𝕀[F] := ⟨rfl⟩
+  let : Countable F := Countable.of_moduleFinite (R := ℚ)
+  let : Countable Fˣ := Units.val_injective.countable
+  let : (μ₁).IsHaarMeasure := (normOneIdeleTamagawaMeasure_existsUnique F).exists.choose_spec.1
+  obtain ⟨i, p, hi, hp, hiinj, -, -, hex, -, -⟩ := normOne_idele_quotient F
+  let ie : Fˣ ≃* i.range := MulEquiv.ofBijective i.rangeRestrict
+    ⟨fun _ _ h ↦ hiinj (congrArg Subtype.val h), i.rangeRestrict_surjective⟩
+  let : Countable i.range := i.rangeRestrict_surjective.countable
+  have hD := (homogeneousThetaSectionAverage_fundamentalDomain v₀ σ b rep hrep₁ hrep i hi).2
+  let Φ (h : N[F]) := ideleValue ψ (h.val * g) * (ω (classOfNormOne h) : ℂ)
+  have hΦ : Integrable Φ μ₁ := homogeneousAdelicTheta_idele_integrable ω ψ g
+  have hsplit (h : N[F]) : (e.symm (g * h.val)).2 = (e.symm g).2 * h := by
+    rw [← he_one h, map_mul, e.symm_apply_apply]
+    rfl
+  let c : ℂ := ω (classOfNormOne (e.symm g).2)
+  have hperiod (h : N[F]) : weightedTheta ω (ideleValue ψ) g h = c * ∑' a : i.range, Φ (a • h) := by
+    have hclass (ξ : Fˣ) : classOfNormOne (i ξ * h) = classOfNormOne h := by
+      have hp' (x : N[F]) : p x = classOfNormOne x := Subtype.ext (hp x)
+      rw [← hp', ← hp', map_mul, (hex (i ξ)).mpr ⟨ξ, rfl⟩, one_mul]
+    have hterm (ξ : Fˣ) : Φ (ie ξ • h) =
+        ideleValue ψ (principal ξ * (g * h.val)) * (ω (classOfNormOne h) : ℂ) := by
+      change ideleValue ψ (((i ξ * h).val) * g) * (ω (classOfNormOne (i ξ * h)) : ℂ) = _
+      rw [hclass, Subgroup.coe_mul, hi, mul_assoc, mul_comm h.val g]
+    have hsum : (∑' a : i.range, Φ (a • h)) =
+        ideleThetaSum (ideleValue ψ) (g * h.val) * (ω (classOfNormOne h) : ℂ) := calc
+      _ = ∑' ξ : Fˣ, Φ (ie ξ • h) := (ie.toEquiv.tsum_eq (fun a : i.range ↦ Φ (a • h))).symm
+      _ = ∑' ξ : Fˣ, ideleValue ψ (principal ξ * (g * h.val)) * (ω (classOfNormOne h) : ℂ) :=
+        tsum_congr hterm
+      _ = _ := tsum_mul_right
+    have hchar := congrArg (fun x : N[F] ↦ (ω (classOfNormOne x) : ℂ)) (hsplit h)
+    change _ * (ω (classOfNormOne (e.symm (g * h.val)).2) : ℂ) = c * _
+    rw [hchar, hsum]
+    change _ * (ω (classOfNormOne (e.symm g).2 * classOfNormOne h) : ℂ) = _
+    simp only [map_mul, Circle.coe_mul]
+    exact mul_left_comm _ _ _
+  have hfold : (∫ h in E₁, ∑' a : i.range, Φ (a • h) ∂μ₁) = ∫ h, Φ h ∂μ₁ := by
+    rw [hD.integral_eq_tsum'' Φ hΦ]
+    apply integral_tsum
+    · exact fun a ↦ (hΦ.1.comp_quasiMeasurePreserving
+      (measurePreserving_mul_left μ₁ a.val).quasiMeasurePreserving).restrict
+    · rw [← hD.lintegral_eq_tsum'' (‖Φ ·‖ₑ)]
+      exact hΦ.2.ne
+  calc
+    _ = ∫ h in E₁, c * ∑' a : i.range, Φ (a • h) ∂μ₁ := integral_congr_ae (.of_forall hperiod)
+    _ = c * (∫ h in E₁, ∑' a : i.range, Φ (a • h) ∂μ₁) := integral_const_mul _ _
+    _ = c * (∫ h, Φ h ∂μ₁) := congrArg (c * ·) hfold
+    _ = _ := congrArg (c * ·) (homogeneousAdelicTheta_eq_idele_integral ω ψ g).symm
 
 include he_one hrep₁ hrep in
 /-- Paper: Equation (11.1.1.12), p. 479. At an idele on the norm section,
@@ -424,6 +530,65 @@ theorem homogeneousThetaSectionAverage_schwartzBruhat (ω : χ)
 -- TODO(paper-gap): The claimed interchange of the limit and orbit sum
 -- in the proof of (11.1.1.13) needs control of the orbit tails.
 
+include he_one in
+/-- Multiplying by a norm-one idele leaves the norm coordinate fixed. -/
+private theorem integrable_homogeneousThetaSectionAverage_of_dominated_section_mul
+    (t : ℝ≥0ˣ) (h : N[F]) : e (t, 1) * h.val = e (t, h) := by
+  rw [← he_one h, ← map_mul]
+  change e (t * 1, 1 * h) = e (t, h)
+  rw [mul_one, one_mul]
+
+/-- The pulled-back character on the norm-one ideles is continuous. -/
+private theorem integrable_homogeneousThetaSectionAverage_of_dominated_character_continuous
+    (ω : χ) : Continuous (fun h : N[F] ↦ (ω (classOfNormOne h) : ℂ)) := by
+  have hq : Continuous (fun h : N[F] ↦ classOfNormOne h) := by
+    apply Continuous.subtype_mk
+    exact QuotientGroup.continuous_mk.comp continuous_subtype_val
+  exact continuous_subtype_val.comp (ω.continuous.comp hq)
+
+include he_one in
+/-- Principal translations preserve the theta series and its character factor. -/
+private theorem integrable_homogeneousThetaSectionAverage_of_dominated_invariant
+    (i : Fˣ →* N[F]) (hi : ∀ ξ, (i ξ).val = principal ξ)
+    (ω : χ) (f : 𝕀[F] → ℂ) (g : 𝕀[F]) (a : i.range) (h : N[F]) :
+    weightedTheta ω f g (a • h) = weightedTheta ω f g h := by
+  obtain ⟨ξ, rfl⟩ := i.rangeRestrict_surjective a
+  have hξ : classOfNormOne (i ξ) = 1 := by
+    apply Subtype.ext
+    change classOf (i ξ).val = 1
+    rw [hi]
+    exact (QuotientGroup.eq_one_iff _).mpr (mem_range_self ξ)
+  have hmul : g * (i ξ * h).val = principal ξ * (g * h.val) := by
+    rw [Subgroup.coe_mul, hi, mul_left_comm]
+  have hsplit : (e.symm (principal ξ * (g * h.val))).2 = i ξ * (e.symm (g * h.val)).2 := by
+    rw [← hi ξ, ← he_one (i ξ), map_mul, e.symm_apply_apply]
+    rfl
+  have hθ : ideleThetaSum f (principal ξ * (g * h.val)) = ideleThetaSum f (g * h.val) := by
+    calc
+      _ = ∑' ζ : Fˣ, f (principal (ζ * ξ) * (g * h.val)) :=
+        tsum_congr fun ζ ↦ congrArg f (by rw [map_mul, mul_assoc])
+      _ = _ := (Equiv.mulRight ξ).tsum_eq (fun ζ : Fˣ ↦ f (principal ζ * (g * h.val)))
+  let W (x : 𝕀[F]) := ideleThetaSum f x * (ω (classOfNormOne (e.symm x).2) : ℂ)
+  change W (g * (i ξ * h).val) = W (g * h.val)
+  refine (congrArg W hmul).trans ?_
+  have hchar := congrArg (fun x : N[F] ↦ (ω (classOfNormOne x) : ℂ)) hsplit
+  change ideleThetaSum f (principal ξ * (g * h.val)) * _ = _
+  rw [hθ, hchar]
+  change _ * (ω (classOfNormOne (i ξ) * classOfNormOne (e.symm (g * h.val)).2) : ℂ) = _
+  rw [hξ, one_mul]
+
+include he_one in
+/-- Restricting an input to the norm section translates the variable of integration. -/
+private theorem integrable_homogeneousThetaSectionAverage_of_dominated_recenter
+    (ω : χ) (f : 𝕀[F] → ℂ) (g : 𝕀[F]) :
+    weightedTheta ω f g = weightedTheta ω f (e ((e.symm g).1, 1)) ∘ ((e.symm g).2 * ·) := by
+  have hg : e ((e.symm g).1, 1) * (e.symm g).2.val = g :=
+    (integrable_homogeneousThetaSectionAverage_of_dominated_section_mul e he_one
+      (e.symm g).1 (e.symm g).2).trans (e.apply_symm_apply g)
+  funext h
+  simp only [Function.comp_apply, Subgroup.coe_mul, ← mul_assoc, hg]
+
+open scoped Pointwise in
 include he_norm he_one hrep₁ hrep in
 /-- Paper: Corollary 11.1.1.5, p. 479. The character-weighted theta
 integrand is integrable over the norm-one domain for every idele.
@@ -440,7 +605,102 @@ theorem integrable_homogeneousThetaSectionAverage_of_dominated
         ((μ₁).restrict E₁)) ∧
       ∀ g : 𝕀[F], g ∈ TE₁ → ∀ k,
         (∑' ξ : Fˣ, ‖ideleValue (φ k) (principal ξ * g)‖) ≤ fractionalIdealOrbitSum I α g) :
-    ∀ (ω : χ) (g : 𝕀[F]), Integrable (weightedTheta ω f g) ((μ₁).restrict E₁) := by sorry
+    ∀ (ω : χ) (g : 𝕀[F]), Integrable (weightedTheta ω f g) ((μ₁).restrict E₁) := by
+  let : BorelSpace 𝕀[F] := ⟨rfl⟩
+  let : Countable F := Countable.of_moduleFinite (R := ℚ)
+  let : Countable Fˣ := Units.val_injective.countable
+  let : (μ₁).IsHaarMeasure := (normOneIdeleTamagawaMeasure_existsUnique F).exists.choose_spec.1
+  obtain ⟨i, _, hi, _, _, _, _, _, _, _⟩ := normOne_idele_quotient F
+  let : Countable i.range := i.rangeRestrict_surjective.countable
+  obtain ⟨hE, hD⟩ := homogeneousThetaSectionAverage_fundamentalDomain v₀ σ b rep hrep₁ hrep i hi
+  obtain ⟨α, I, -, -, -, hInt, hbound⟩ := hmajorant
+  intro ω g
+  let t := (e.symm g).1
+  let k := (e.symm g).2
+  let P := weightedTheta ω f (e (t, 1))
+  have hP (h : N[F]) : P h = ideleThetaSum f (e (t, h)) * (ω (classOfNormOne h) : ℂ) := by
+    simp only [P, integrable_homogeneousThetaSectionAverage_of_dominated_section_mul e he_one,
+      e.symm_apply_apply]
+  have hslice (h : N[F]) (hh : h ∈ E₁) : e (t, h) ∈ TE₁ :=
+    ⟨(t, h), ⟨mem_univ _, hh⟩, rfl⟩
+  have hsums (h : N[F]) (hh : h ∈ E₁) :
+      Summable (fun ξ : Fˣ ↦ ‖f (principal ξ * e (t, h))‖) :=
+    summable_norm_orbit_of_tendsto_of_le φ f (e (t, h)) (fun _ ↦ hlim _) _
+      (hbound _ (hslice h hh))
+  have hTheta : AEStronglyMeasurable (fun h : N[F] ↦ ideleThetaSum f (e (t, h)))
+      ((μ₁).restrict E₁) := by
+    have hf := measurable_ideleLimit φ f hlim
+    have he : Continuous (fun h : N[F] ↦ e (t, h)) :=
+      e.continuous.comp (Continuous.prodMk_right t)
+    refine aestronglyMeasurable_of_tendsto_ae (atTop : Filter (Finset Fˣ))
+      (f := fun s h ↦ ∑ ξ ∈ s, f (principal ξ * e (t, h))) ?_ ?_
+    · exact fun s ↦ (Finset.measurable_sum s fun ξ _ ↦
+        hf.comp ((continuous_const_mul (principal ξ)).comp he).measurable).aestronglyMeasurable
+    · exact (ae_restrict_iff' hE).mpr (.of_forall fun h hh ↦ (hsums h hh).of_norm.hasSum)
+  have hPint : IntegrableOn P E₁ μ₁ := by
+    refine (hInt t).mono' ?_ ((ae_restrict_iff' hE).mpr (.of_forall fun h hh ↦ ?_))
+    · have hχ := integrable_homogeneousThetaSectionAverage_of_dominated_character_continuous ω
+      exact (hTheta.mul hχ.aestronglyMeasurable).congr (.of_forall fun h ↦ (hP h).symm)
+    · rw [hP, norm_mul, Circle.norm_coe, mul_one]
+      exact (norm_tsum_le_tsum_norm (hsums h hh)).trans
+        (Real.tsum_le_of_sum_le (fun _ ↦ norm_nonneg _)
+          (sum_norm_orbit_le_of_tendsto_of_le φ f (e (t, h)) (fun _ ↦ hlim _) _
+            (hbound _ (hslice h hh))))
+  have hShift : IntegrableOn P (k • E₁) μ₁ :=
+    (hD.integrableOn_iff (hD.smul_of_comm k)
+      (integrable_homogeneousThetaSectionAverage_of_dominated_invariant e he_one i hi ω f _)).mp hPint
+  rw [integrable_homogeneousThetaSectionAverage_of_dominated_recenter e he_one]
+  exact ((measurePreserving_mul_left μ₁ k).integrableOn_image
+    (measurableEmbedding_const_smul k) (f := P) (s := E₁)).mp hShift
+
+/-- Uniform tails give uniform convergence of the finite orbit sums in the sequence index,
+so their limits in the sequence index converge to the orbit sum of the limit. -/
+private theorem tendsto_homogeneousThetaSectionAverage_of_dominated_orbit
+    (φ : ℕ → ℬ[F]) (f : 𝕀[F] → ℂ) (g : 𝕀[F])
+    (hlim : ∀ ξ : Fˣ, Tendsto (fun k ↦ ideleValue (φ k) (principal ξ * g)) atTop
+      (𝓝 (f (principal ξ * g))))
+    (hsum : Summable (fun ξ : Fˣ ↦ ‖f (principal ξ * g)‖))
+    (htails : ∀ ε : ℝ≥0∞, 0 < ε → ∃ s : Finset Fˣ, ∀ k,
+      (∑' ξ : {ξ : Fˣ // ξ ∉ s}, ‖ideleValue (φ k) (principal ξ.val * g)‖ₑ) < ε) :
+    Tendsto (fun k ↦ ideleThetaSum (ideleValue (φ k)) g) atTop (𝓝 (ideleThetaSum f g)) := by
+  let a (k : ℕ) (ξ : Fˣ) := ideleValue (φ k) (principal ξ * g)
+  have ha (k : ℕ) : Summable (a k) := (summable_norm_ideleValue_orbit (φ k) g).of_norm
+  have hu : TendstoUniformly (fun (s : Finset Fˣ) k ↦ ∑ ξ ∈ s, a k ξ)
+      (fun k ↦ ∑' ξ, a k ξ) atTop := by
+    apply EMetric.tendstoUniformly_iff.mpr
+    intro ε hε
+    obtain ⟨s, hs⟩ := htails ε hε
+    filter_upwards [eventually_ge_atTop s] with u hsu k
+    change edist (∑' ξ, a k ξ) (∑ ξ ∈ u, a k ξ) < ε
+    rw [eDist_eq_eNorm_sub, ← (ha k).sum_add_tsum_subtype_compl u, add_sub_cancel_left]
+    have hc : {ξ : Fˣ | ξ ∉ u} ⊆ {ξ : Fˣ | ξ ∉ s} := fun _ hξ hsξ ↦ hξ (hsu hsξ)
+    exact eNorm_tsum_le_tsum_eNorm.trans_lt
+      ((tsum_mono_subtype (fun ξ ↦ ‖a k ξ‖ₑ) hc).trans_lt (hs k))
+  exact hu.tendsto_of_eventually_tendsto
+    (.of_forall fun s ↦ tendsto_finsetSum s fun ξ _ ↦ hlim ξ) hsum.of_norm.hasSum
+
+open scoped Pointwise in
+include he_one in
+/-- Integration of the principal-invariant integrand depends only on the norm coordinate. -/
+private theorem tendsto_homogeneousThetaSectionAverage_of_dominated_recenter
+    (i : Fˣ →* N[F]) (hi : ∀ ξ, (i ξ).val = principal ξ) [Countable i.range]
+    (hD : IsFundamentalDomain i.range E₁ μ₁)
+    (ω : χ) (f : 𝕀[F] → ℂ) (g : 𝕀[F]) :
+    homogeneousThetaSectionAverage e v₀ σ b rep ω f g =
+      homogeneousThetaSectionAverage e v₀ σ b rep ω f (e ((e.symm g).1, 1)) := by
+  let : BorelSpace 𝕀[F] := ⟨rfl⟩
+  let : (μ₁).IsHaarMeasure := (normOneIdeleTamagawaMeasure_existsUnique F).exists.choose_spec.1
+  let k := (e.symm g).2
+  let P := weightedTheta ω f (e ((e.symm g).1, 1))
+  calc
+    _ = ∫ h in E₁, P (k * h) ∂μ₁ :=
+      congrArg (fun V : N[F] → ℂ ↦ ∫ h in E₁, V h ∂μ₁)
+        (integrable_homogeneousThetaSectionAverage_of_dominated_recenter e he_one ω f g)
+    _ = ∫ h in k • E₁, P h ∂μ₁ :=
+      ((measurePreserving_mul_left μ₁ k).setIntegral_image_emb
+        (measurableEmbedding_const_smul k) P E₁).symm
+    _ = _ := (hD.smul_of_comm k).setIntegral_eq hD
+      (integrable_homogeneousThetaSectionAverage_of_dominated_invariant e he_one i hi ω f _)
 
 include he_norm he_one hrep₁ hrep in
 /-- Paper: Corollary 11.1.1.5, p. 479. The limit and approximating
@@ -468,7 +728,72 @@ theorem tendsto_homogeneousThetaSectionAverage_of_dominated
       (∀ k g, Aₖ k (QuotientGroup.mk' _ (classOf g)) =
         (ω (classOfNormOne (e.symm g).2) : ℂ) *
           homogeneousAdelicTheta ω (φ k) (classOf g)) ∧
-      ∀ q, Tendsto (fun k ↦ Aₖ k q) atTop (𝓝 (A q)) := by sorry
+      ∀ q, Tendsto (fun k ↦ Aₖ k q) atTop (𝓝 (A q)) := by
+  let : BorelSpace 𝕀[F] := ⟨rfl⟩
+  let : Countable F := Countable.of_moduleFinite (R := ℚ)
+  let : Countable Fˣ := Units.val_injective.countable
+  obtain ⟨i, _, hi, _, _, _, _, _, _, _⟩ := normOne_idele_quotient F
+  let : Countable i.range := i.rangeRestrict_surjective.countable
+  obtain ⟨hE, hD⟩ := homogeneousThetaSectionAverage_fundamentalDomain v₀ σ b rep hrep₁ hrep i hi
+  obtain ⟨α, I, -, -, -, hInt, hbound⟩ := hmajorant
+  intro ω
+  let S (u : 𝕀[F] → ℂ) := homogeneousThetaSectionAverage e v₀ σ b rep ω u
+  let qNorm : C[F] ⧸ C₁[F] →* ℝ≥0ˣ := QuotientGroup.lift _ (ideleClassNorm F) le_rfl
+  have hq (g : 𝕀[F]) : qNorm (QuotientGroup.mk' _ (classOf g)) = (e.symm g).1 := by
+    change ideleNorm F g = (e.symm g).1
+    calc
+      ideleNorm F g = ideleNorm F (e ((e.symm g).1, (e.symm g).2)) :=
+        congrArg (ideleNorm F) (e.apply_symm_apply g).symm
+      _ = _ := he_norm _ _
+  have hS (u : 𝕀[F] → ℂ) (g : 𝕀[F]) : S u g = S u (e ((e.symm g).1, 1)) :=
+    tendsto_homogeneousThetaSectionAverage_of_dominated_recenter e he_one v₀ σ b rep i hi hD ω u g
+  refine ⟨fun q ↦ S f (e (qNorm q, 1)), fun k q ↦ S (ideleValue (φ k)) (e (qNorm q, 1)),
+    fun g ↦ ?_, fun k g ↦ ?_, fun q ↦ ?_⟩
+  · exact (congrArg (fun t ↦ S f (e (t, 1))) (hq g)).trans (hS f g).symm
+  · calc
+      _ = S (ideleValue (φ k)) (e ((e.symm g).1, 1)) :=
+        congrArg (fun t ↦ S (ideleValue (φ k)) (e (t, 1))) (hq g)
+      _ = S (ideleValue (φ k)) g := (hS _ g).symm
+      _ = _ := homogeneousThetaSectionAverage_schwartzBruhat_eq_character_mul
+        e he_one v₀ σ b rep hrep₁ hrep ω (φ k) g
+  · let t := qNorm q
+    let W (u : 𝕀[F] → ℂ) (h : N[F]) :=
+      ideleThetaSum u (e (t, h)) * (ω (classOfNormOne h) : ℂ)
+    have hW (u : 𝕀[F] → ℂ) : S u (e (t, 1)) = ∫ h in E₁, W u h ∂μ₁ := by
+      simp only [S, homogeneousThetaSectionAverage, W,
+        integrable_homogeneousThetaSectionAverage_of_dominated_section_mul e he_one,
+        e.symm_apply_apply]
+    have hslice (h : N[F]) (hh : h ∈ E₁) : e (t, h) ∈ TE₁ :=
+      ⟨(t, h), ⟨mem_univ _, hh⟩, rfl⟩
+    have hconv : Tendsto (fun k ↦ ∫ h in E₁, W (ideleValue (φ k)) h ∂μ₁) atTop
+        (𝓝 (∫ h in E₁, W f h ∂μ₁)) := by
+      refine tendsto_integral_of_dominated_convergence
+        (fun h : N[F] ↦ fractionalIdealOrbitSum I α (e (t, h))) ?_ (hInt t) ?_ ?_
+      · intro k
+        have he : Continuous (fun h : N[F] ↦ e (t, h)) :=
+          e.continuous.comp (Continuous.prodMk_right t)
+        have hχ := integrable_homogeneousThetaSectionAverage_of_dominated_character_continuous ω
+        have hc := ((adelicTheta (φ k)).continuous.comp (QuotientGroup.continuous_mk.comp he)).mul hχ
+        exact hc.aestronglyMeasurable.congr (.of_forall fun h ↦
+          congrArg (fun z : ℂ ↦ z * (ω (classOfNormOne h) : ℂ))
+            (ideleThetaSum_schwartzBruhat (φ k) (e (t, h))).symm)
+      · intro k
+        refine (ae_restrict_iff' hE).mpr (.of_forall fun h hh ↦ ?_)
+        calc
+          ‖W (ideleValue (φ k)) h‖ = ‖ideleThetaSum (ideleValue (φ k)) (e (t, h))‖ := by
+            change ‖ideleThetaSum (ideleValue (φ k)) (e (t, h)) * (ω (classOfNormOne h) : ℂ)‖ = _
+            rw [norm_mul, Circle.norm_coe, mul_one]
+          _ ≤ _ := (norm_tsum_le_tsum_norm (summable_norm_ideleValue_orbit (φ k) (e (t, h)))).trans
+            (hbound _ (hslice h hh) k)
+      · refine (ae_restrict_iff' hE).mpr (.of_forall fun h hh ↦ ?_)
+        have hsum := summable_norm_orbit_of_tendsto_of_le φ f (e (t, h)) (fun _ ↦ hlim _) _
+          (hbound _ (hslice h hh))
+        exact (tendsto_homogeneousThetaSectionAverage_of_dominated_orbit φ f (e (t, h))
+          (fun _ ↦ hlim _) hsum (htails _ (hslice h hh))).mul
+          (tendsto_const_nhds (x := (ω (classOfNormOne h) : ℂ)))
+    change Tendsto (fun k ↦ S (ideleValue (φ k)) (e (t, 1))) atTop (𝓝 (S f (e (t, 1))))
+    rw [hW f]
+    exact hconv.congr' (.of_forall fun k ↦ (hW (ideleValue (φ k))).symm)
 
 end FundamentalDomain
 
